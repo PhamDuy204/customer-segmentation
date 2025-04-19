@@ -57,6 +57,7 @@ def load_data():
     except FileNotFoundError:
         st.error("File CSV không tồn tại!")
         return None
+
 class_to_label = {
     0: 'At_risk',
     1: 'Hibernate',
@@ -64,40 +65,70 @@ class_to_label = {
     3: 'Regular',
     4: 'Loyal'
 }
+
 model = load_model()
 df = load_data()
-df['Member_number'] = df['Member_number'].astype(str)  # Đảm bảo Member_number là kiểu chuỗi
-df ['Class'] = model.predict(df[['Recency', 'Frequency', 'Monetary']]).astype(int)
-df ['Class'] = df['Class'].map(class_to_label)
+if df is not None:
+    df['Member_number'] = df['Member_number'].astype(str)  # Đảm bảo Member_number là kiểu chuỗi
+    df['Class'] = model.predict(df[['Recency', 'Frequency', 'Monetary']]).astype(int)
+    df['Class'] = df['Class'].map(class_to_label)
 
 # Header
 st.markdown('<div class="header"><h1>Customer RFM Prediction Dashboard</h1></div>', unsafe_allow_html=True)
 
 # Sidebar
 st.sidebar.header("Navigation")
-menu = st.sidebar.radio("Chọn chức năng:", ["Random 5 Customers", "Predict RFM", "Add New Customers", "Search Customer"])
+menu = st.sidebar.radio("Chọn chức năng:", ["Homepage", "Predict RFM", "Add New Customers", "Search Customer"])
 
 # Chức năng 1: Hiển thị ngẫu nhiên 5 khách hàng
-if menu == "Random 5 Customers":
-    st.subheader("Random 5 Customers")
-    if st.button("Show random 5 members"):
+# Chức năng 1: Homepage
+if menu == "Homepage":
+    st.subheader("Homepage")
+    
+    # Phần Overview
+    st.markdown("""
+    <div class="overview">
+        <h2>Giới thiệu</h2>
+        <p><strong>Thành viên dự án:</strong> Phạm Đình Anh Duy, Châu Nhật Minh</p>
+        <p><strong>Mô tả trang web:</strong> Trang web này phục vụ các chủ cửa hàng có thể phân loại khách hàng thành các phân khúc dựa trên các chỉ số RFM (Recency, Frequency, Monetary). Trong dự án này, chúng tôi sử dụng thuật toán K-Means để phân khách hàng thành 5 phân khúc (At_risk, Hibernate, High_spender, Regular, Loyal) và áp dụng Decision Tree để đưa ra các rule nhằm phân loại khách hàng một cách chính xác.</p>
+        <p><strong>Các chức năng chính:</strong></p>
+        <ul>
+            <li><strong>Predict RFM:</strong> Dự đoán phân khúc khách hàng dựa trên các giá trị RFM nhập vào.</li>
+            <li><strong>Add New Customers:</strong> Thêm khách hàng mới và dự đoán phân khúc của họ.</li>
+            <li><strong>Search Customer:</strong> Tìm kiếm và xem thông tin chi tiết của khách hàng theo Member ID.</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Phần hình ảnh demo
+    st.markdown("### Demo các chức năng")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.image("./public/predict_rfm_demo.png", use_container_width=True)
+    with col2:
+        st.image("./public/add_customers_demo.png", use_container_width=True)
+    with col3:
+        st.image("./public/search_customer_demo.png", use_container_width=True)
+    
+    # Phần hiển thị ngẫu nhiên 5 khách hàng
+    st.markdown("### Ngẫu nhiên 5 khách hàng")
+    if st.button("Hiển thị ngẫu nhiên 5 khách hàng") or 1:
         if df is not None:
             random_customers = df.sample(5, random_state=None)
             st.dataframe(random_customers, use_container_width=True)
         else:
             st.warning("Không thể tải dữ liệu khách hàng.")
-
 # Chức năng 2: Dự đoán RFM từ input người dùng
 elif menu == "Predict RFM":
     st.subheader("Predict Customer Class")
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        r = st.number_input("Recency (R)", min_value=0, value=0, step=1)
+        r = st.number_input("Recency (R)", min_value=1, max_value=1000, value=1, step=1)
     with col2:
-        f = st.number_input("Frequency (F)", min_value=0, value=0, step=1)
+        f = st.number_input("Frequency (F)", min_value=1, max_value=90, value=1, step=1)
     with col3:
-        m = st.number_input("Monetary (M)", min_value=0, value=0, step=1)
+        m = st.number_input("Monetary (M)", min_value=1.0, max_value=2000.0, value=1.0, step=0.01)
     
     if st.button("Predict"):
         if model is not None:
@@ -115,67 +146,79 @@ elif menu == "Predict RFM":
 # Chức năng 3: Thêm và dự đoán cho 5 khách hàng mới
 elif menu == "Add New Customers":
     st.subheader("Add and Predict for New Customers")
+    
+    if df is not None:
+        # Tìm MemberID lớn nhất hiện có
+        if not df.empty:
+            max_id = df['Member_number'].astype(int).max()
+            if "value" not in st.session_state:
+                st.session_state.value = max_id
+            min_id = df['Member_number'].astype(int).min()
+        else:
+            max_id = 0  # Nếu không có dữ liệu, bắt đầu từ 1
+            min_id = 0
+        st.info(f"Current Member_number range: {min_id} to { st.session_state.value}")
+    else:
+        st.warning("Không thể tải dữ liệu khách hàng.")
+        max_id = 0
+
     new_customers = []
-    tmp_member_ids = []
-    for i in range(5):
+    num_customers = st.slider("Chọn số lượng khách hàng muốn thêm", min_value=1, max_value=10, value=5)
+    for i in range(num_customers):
         st.markdown(f"**Customer {i+1}**")
-        col1, col2, col3, col4 = st.columns(4)
+        # Tự động sinh MemberID mới
+        new_member_id = st.session_state.value +1 + i
+        st.write(f"Member ID: {new_member_id}")
+        
+        col1, col2, col3 = st.columns(3)
         with col1:
-            member_id = st.text_input(f"Member ID {i+1}", key=f"id_{i}")
-            if member_id == "":
-                st.warning("Vui lòng nhập Member ID.")
-                continue
-            
-            if member_id in df['Member_number'].values or (member_id in tmp_member_ids):
-                st.warning(f"Member ID {member_id} đã tồn tại trong dữ liệu.")
-                continue
-            tmp_member_ids.append(member_id)
-            # elif member_id == "":
-            #     st.warning("Vui lòng nhập Member ID.")
-            #     continue
-            # else:
-            #     pass
+            r = st.number_input(f"R {i+1}", min_value=1, max_value=1000, value=1, step=1, key=f"r_{i}")
         with col2:
-            r = st.number_input(f"R {i+1}", min_value=0, value=0, step=1, key=f"r_{i}")
+            f = st.number_input(f"F {i+1}", min_value=1, max_value=90, value=1, step=1, key=f"f_{i}")
         with col3:
-            f = st.number_input(f"F {i+1}", min_value=0, value=0, step=1, key=f"f_{i}")
-        with col4:
-            m = st.number_input(f"M {i+1}", min_value=0, value=0, step=1, key=f"m_{i}")
-        new_customers.append({'Member_number':member_id,'Recency': r, 'Frequency': f, 'Monetary': m})
-    new_df = pd.DataFrame(new_customers)
-    df = pd.concat([df, new_df],axis=0, ignore_index=True)
-    if st.button("Predict for New Customers"):
-        if model is not None:
+            m = st.number_input(f"M {i+1}", min_value=1.0, max_value=2000.0, value=1.0, step=0.01, key=f"m_{i}")
+        
+        new_customers.append({'Member_number': str(new_member_id), 'Recency': r, 'Frequency': f, 'Monetary': m})
+    
+    if st.button("Add and Predict"):
+        if model is not None and df is not None:
             try:
+                new_df = pd.DataFrame(new_customers)
                 predictions = model.predict(new_df[['Recency', 'Frequency', 'Monetary']])
-                new_df['Predicted Class'] = [class_to_label[int(p)] for p in predictions]
-                st.success("Dự đoán thành công!")
+                new_df['Class'] = [class_to_label[int(p)] for p in predictions]
+                df = pd.concat([df, new_df], axis=0, ignore_index=True)
+                df.to_csv("rfm.csv", index=False)
+                st.success("Thêm và dự đoán thành công!")
                 st.write("**New Customers with Predictions:**")
                 st.dataframe(new_df, use_container_width=True)
             except Exception as e:
-                st.error(f"Lỗi khi dự đoán: {e}")
+                st.error(f"Lỗi khi thêm và dự đoán: {e}")
         else:
-            st.error("Mô hình chưa được tải.")
-
+            st.error("Mô hình hoặc dữ liệu chưa được tải.")
+    if st.button("Refresh"):
+        max_id = df['Member_number'].astype(int).max()
+        st.session_state.value += num_customers
+        st.rerun()
+        st.success("Đã đặt lại Member ID về giá trị tối đa hiện tại.")
 # Chức năng 4: Tìm kiếm khách hàng và dự đoán class
 elif menu == "Search Customer":
     st.subheader("Search Customer by Member ID")
-    search_id = st.text_input("Enter Member ID")
-    
-    if st.button("Search"):
-        if df is not None and model is not None:
-            customer = df[df['Member_number'] == search_id]
+    if df is not None:
+        member_ids = df['Member_number'].tolist()
+        selected_id = st.selectbox("Select Member ID", member_ids)
+        
+        if st.button("Search"):
+            customer = df[df['Member_number'] == selected_id]
             if not customer.empty:
                 rfm = customer[['Recency', 'Frequency', 'Monetary']]
                 prediction = model.predict(rfm)[0]
-                       
                 st.write("**Customer Details:**")
                 st.dataframe(customer[['Member_number', 'Recency', 'Frequency', 'Monetary']], use_container_width=True)
                 st.success(f"Predicted Class: {class_to_label[int(prediction)]}")
             else:
                 st.warning("Không tìm thấy khách hàng với ID này.")
-        else:
-            st.error("Dữ liệu hoặc mô hình chưa được tải.")
+    else:
+        st.error("Dữ liệu chưa được tải.")
 
 # Footer
 st.markdown("---")
